@@ -3,14 +3,10 @@ from sshtunnel import SSHTunnelForwarder
 import os
 import psycopg2
 
-
-
-
 def connect_and_setup():
     load_dotenv()
     username = os.getenv("USERNAME")
     password = os.getenv("PASSWORD")
-    dbname = os.getenv("csci320_movies")
 
     ssh_server = SSHTunnelForwarder(
         ('starbug.cs.rit.edu', 22),
