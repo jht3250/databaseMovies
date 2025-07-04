@@ -1,7 +1,10 @@
 from dotenv import load_dotenv
+from psycopg2._psycopg import cursor
 from sshtunnel import SSHTunnelForwarder
 import os
 import psycopg2
+import csv
+import ast
 
 def connect_to_db():
     load_dotenv()
@@ -45,52 +48,68 @@ def connect_and_setup():
     conn.close()
 
 def insert_movie(movieID, title, runtime, mmpa, releasedDate):
-    conn, cursor = connect_to_db()
-    print(movieID)
-    query = f"INSERT INTO movies (MovieID, Title, Length, MMPA, ReleasedDate) VALUES ({movieID}, {title}, {runtime}, {mmpa}, {releasedDate})"
-    cursor.execute(query)
-    conn.commit()
+    title = title.replace("'", "''")
+    query = f"INSERT INTO movies (MovieID, Title, Length, MMPA, ReleaseDate) VALUES ({movieID}, '{title}', {runtime}, '{mmpa}', {releasedDate});"
+    return query
 
-    cursor.close()
-    conn.close()
+def insert_two_int_values(table, var1, var2, value1, value2):
+    query = f"INSERT INTO {table} ({var1}, {var2}) VALUES ({value1}, {value2});"
+    return query
 
-def insert_two_values(table, var1, var2, value1, value2):
-    conn, cursor = connect_to_db()
-    query = f"INSERT INTO {table} ({var1}, {var2}) VALUES ({value1}, {value2})"
-    cursor.execute(query)
-    conn.commit()
-
-    cursor.close()
-    conn.close()
+def insert_two_values_with_str(table, var1, var2, value1, value2):
+    value2 = value2.replace("'", "''")
+    if isinstance(value2, str):
+        value2 = f"'{value2}'"
+    query = f"INSERT INTO {table} ({var1}, {var2}) VALUES ({value1}, {value2}) ON CONFLICT DO NOTHING;"
+    return query
 
 def mass_movie_insert():
+    conn, cursor = connect_to_db()
+    query = ""
+
     with open('../data/tmdb_5000_movies.csv', 'r') as file:
-        sql_script = file.read()
+        csv_reader = csv.reader(file, delimiter=',')
+        next(csv_reader)
 
-        for line in sql_script.split('\n')[1:]:
-            splitted = line.split(',')
-            print(line)
-            movieID = splitted[1]
-            title = splitted[6]
-            runtime = splitted[5]
-            release_date = splitted[4]
-            platform = splitted[-1]
-            mmpa = splitted[-2]
-            genre = splitted[0] #THIS IS A LIST OF DICTIONARY {ID:0 , Name'adventure'}
-            studio = splitted[3]    ##LIST OF studios {name: 'FOX', id:0}
+        for line in csv_reader:
+            movieID = line[1]
+            if movieID == '' or movieID is None:
+                continue
+            title = line[6]
+            runtime = line[5]
+            release_date = line[4]
+            platform = line[-1]
+            mmpa = line[-2]
+            genre = line[0] #THIS IS A LIST OF DICTIONARY {ID:0 , Name'adventure'}
+            studio = line[3]    ##LIST OF studios {name: 'FOX', id:0}
 
-            insert_movie(movieID, title, runtime, mmpa, release_date)
-            for genreID, genreName in genre:
-                insert_two_values('Genre', 'GenreID', 'Name', genreID, genreName)
-                insert_two_values('Movie_Genre', 'MovieID', 'GenreID', movieID, genreID)
-            for studioName, studioID in studio:
-                insert_two_values('Studio', 'StudioID', 'Name', studioID, studioName)
-                insert_two_values('Movie_Studio', 'MovieID', 'StudioID', movieID, studioID)
-            insert_two_values('Platform', 'PlatformID', 'Name', platform['id'], platform['name'])
-            insert_two_values('Movie_Platform', 'MovieID', 'PlatformID', movieID, platform['id'])
+            print(movieID, title, runtime, mmpa, release_date)
+            # print(genre)
+            # print(studio)
 
+            query += insert_movie(movieID, title, runtime, mmpa, release_date)
 
+            genre = ast.literal_eval(genre)
+            for genreDict in genre:
+                genreID = genreDict['id']
+                genreName = genreDict['name']
+                query += insert_two_values_with_str('Genre', 'GenreID', 'Name', genreID, genreName)
+                query += insert_two_int_values('Movie_Genre', 'MovieID', 'GenreID', movieID, genreID)
 
+            studio = ast.literal_eval(studio)
+            for studioDict in studio:
+                studioID = studioDict['id']
+                studioName = studioDict['name']
+                query += insert_two_values_with_str('Studio', 'StudioID', 'Name', studioID, studioName)
+                query += insert_two_int_values('Movie_Studio', 'MovieID', 'StudioID', movieID, studioID)
+            platform = ast.literal_eval(platform)
+            query += insert_two_values_with_str('Platform', 'PlatformID', 'Name', platform['id'], platform['name'])
+            query += insert_two_int_values('Movie_Platform', 'MovieID', 'PlatformID', movieID, platform['id'])
+
+    cursor.execute(query)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 
