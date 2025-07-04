@@ -9,6 +9,9 @@ DROP TABLE IF EXISTS Movie_Genre;
 DROP TABLE IF EXISTS Movie_Studio;
 DROP TABLE IF EXISTS Movie_Platform;
 DROP TABLE IF EXISTS Movie_Person;
+DROP TABLE IF EXISTS Movie_Actor;
+DROP TABLE IF EXISTS Movie_Director;
+
 
 CREATE TABLE MOVIES(
     MovieID         int PRIMARY KEY,
@@ -69,7 +72,12 @@ CREATE TABLE Movie_Platform(
     PlatformID         int NOT NULL
 );
 
-CREATE TABLE Movie_Person(
+CREATE TABLE Movie_Actor(
+    MovieID         int NOT NULL,
+    PersonID         int NOT NULL
+);
+
+CREATE TABLE Movie_Director(
     MovieID         int NOT NULL,
     PersonID         int NOT NULL
 );

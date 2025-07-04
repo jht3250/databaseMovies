@@ -83,9 +83,7 @@ def mass_movie_insert():
             genre = line[0] #THIS IS A LIST OF DICTIONARY {ID:0 , Name'adventure'}
             studio = line[3]    ##LIST OF studios {name: 'FOX', id:0}
 
-            print(movieID, title, runtime, mmpa, release_date)
-            # print(genre)
-            # print(studio)
+            print(title, runtime, mmpa, release_date)
 
             query += insert_movie(movieID, title, runtime, mmpa, release_date)
 
@@ -113,6 +111,59 @@ def mass_movie_insert():
 
 
 
+def insert_person(id, name):
+    name = name.replace("'", "''")
+    query = f"INSERT INTO Person (PersonID, name) VALUES ({id}, '{name}') ON CONFLICT DO NOTHING;"
+    return query
+
+def insert_movie_person_director(table, movieID, personID):
+    query = f"INSERT INTO {table} (MovieID, PersonID) VALUES ({movieID}, {personID});"
+    return query
+
+def mass_actor_insert():
+    conn, cursor = connect_to_db()
+    query = ""
+
+    with open('../data/tmdb_5000_credits.csv', 'r') as file:
+        csv_reader = csv.reader(file, delimiter=',')
+        next(csv_reader)
+
+        for line in csv_reader:
+            movieID = line[0]
+            title = line[1]
+            cast = line[2]
+            crew = line[3]
+
+            cast = ast.literal_eval(cast)
+            crew = ast.literal_eval(crew)
+            if len(cast) > 3:
+                cast = cast[:3]
+            for castDict in cast:
+                castID = castDict['id']
+                name = castDict['name']
+                query += insert_person(castID, name)
+                query += insert_movie_person_director('Movie_Actor', movieID, castID)
+                print(name, 'Actor')
+            for crewDict in crew:
+                if crewDict['job'] == 'Director':
+                    crewID = crewDict['id']
+                    name = crewDict['name']
+                    query +=insert_person(crewID, name)
+                    query += insert_movie_person_director('Movie_Director', movieID, crewID)
+                    print(name, 'Director')
+
+    cursor.execute(query)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+
+
+
+
+
 if __name__ == "__main__":
     connect_and_setup()
     mass_movie_insert()
+    mass_actor_insert()
