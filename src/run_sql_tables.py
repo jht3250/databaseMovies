@@ -158,11 +158,6 @@ def mass_actor_insert():
     conn.close()
 
 
-
-
-
-
-
 if __name__ == "__main__":
     connect_and_setup()
     mass_movie_insert()
