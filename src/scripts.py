@@ -42,5 +42,5 @@ def add_platform_to_csv():
 
         df.to_csv("../data/tmdb_5000_movies.csv", index=False)
 
-add_rating_to_csv()
-add_platform_to_csv()
+# add_rating_to_csv()
+# add_platform_to_csv()
