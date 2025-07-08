@@ -5,34 +5,10 @@ import os
 import psycopg2
 import csv
 import ast
-
-def connect_to_db():
-    load_dotenv()
-    username = os.getenv("USERNAME")
-    password = os.getenv("PASSWORD")
-
-    ssh_server = SSHTunnelForwarder(
-        ('starbug.cs.rit.edu', 22),
-        ssh_username=username,
-        ssh_password=password,
-        remote_bind_address=("127.0.0.1", 5432),
-    )
-    ssh_server.start()
-
-    # Connect to SQL server
-    conn = psycopg2.connect(
-        database='csci320_movies',
-        user=username,
-        password=password,
-        host='127.0.0.1',
-        port=ssh_server.local_bind_port,
-    )
-    cursor = conn.cursor()
-    return conn, cursor
+import dbconn
 
 def connect_and_setup():
-
-    conn, cursor = connect_to_db()
+    conn, cursor = dbconn.connect_to_db()
 
     with open('../database/tables.sql', 'r') as file:
         sql_script = file.read()
@@ -64,7 +40,7 @@ def insert_two_values_with_str(table, var1, var2, value1, value2):
     return query
 
 def mass_movie_insert():
-    conn, cursor = connect_to_db()
+    conn, cursor = dbconn.connect_to_db()
     query = ""
 
     with open('../data/tmdb_5000_movies.csv', 'r') as file:
@@ -109,8 +85,6 @@ def mass_movie_insert():
     cursor.close()
     conn.close()
 
-
-
 def insert_person(id, name):
     name = name.replace("'", "''")
     query = f"INSERT INTO Person (PersonID, name) VALUES ({id}, '{name}') ON CONFLICT DO NOTHING;"
@@ -121,7 +95,7 @@ def insert_movie_person_director(table, movieID, personID):
     return query
 
 def mass_actor_insert():
-    conn, cursor = connect_to_db()
+    conn, cursor = dbconn.connect_to_db()
     query = ""
 
     with open('../data/tmdb_5000_credits.csv', 'r') as file:
