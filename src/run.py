@@ -1,10 +1,38 @@
 import sys
 from dbconn import connect_to_db
+from user_queries import create_user, auth
 
 #init global vars
 conn = None
 cursor = None 
 current_user = None
+
+def login():
+    global current_user
+    
+    print("\n---LOGIN---")
+    username = input("Username: ")
+    password = input("Password: ")
+
+    success, message = auth(cursor, conn, username, password)
+    print(f"\n{message}\n")
+
+    if success:
+        current_user = username
+
+def create_account():
+    print("\n---CREATE ACCOUNT---")
+    username = input("Username: ")
+    password = input("Password: ")
+    first_name = input("First Name: ")
+    last_name = input("Last Name: ")
+
+    success, message = create_user(cursor, conn, username, password, first_name, last_name)
+
+    print(f"\n{message}")
+
+    if success:
+        print("You can now login with your new account.\n")
 
 def menu():
     print("Movie System")
@@ -47,9 +75,9 @@ def logged_in(choice):
 def guest(choice):
     match choice:
         case "1":
-            print("\nLogin - To be implemented")
+            login()
         case "2":
-            print("\nCreate Account - To be implemented")
+            create_account()
         case "3":
             return False
         case _:
