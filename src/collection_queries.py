@@ -1,6 +1,9 @@
 def create_collection(cursor, conn, username, collection_name):
     try:
-        cursor.execute("SELECT MAX(CollectionID) FROM Collection")
+        query = """
+            SELECT MAX(CollectionID) FROM Collection WHERE username = %s
+        """
+        cursor.execute(query, (username,))
         max_id = cursor.fetchone()[0]
         if max_id is None:
             new_id = 1 
