@@ -39,6 +39,7 @@ def create_account():
         print("You can now login with your new account.\n")
 
 def menu():
+    """Display the main menu and return user's choice"""
     print("Movie System")
     print("-------------------------")
 
@@ -58,13 +59,14 @@ def menu():
     return input("Please select an option: ")
 
 def logged_in(choice):
+    """Options for logged-in users"""
     match choice:
         case "1":
-            manage_collections()
+            return manage_collections()
         case "2":
-            search_movies_menu()
+            return search_movies_menu()
         case "3":
-            rate_watch_menu()
+            return rate_watch_menu()
         case "4":
             print("\nSocial Features - To be implemented")
         case "5":
@@ -77,6 +79,7 @@ def logged_in(choice):
             print("Invalid choice! Please try again.")
 
 def guest(choice):
+    """Guest user options"""
     match choice:
         case "1":
             login()
@@ -90,6 +93,7 @@ def guest(choice):
     return True
 
 def manage_collections():
+    """Manage user collections"""
     while True:
         print("\n---COLLECTION MANAGEMENT---")
         print("1. View My Collections")
@@ -119,11 +123,12 @@ def manage_collections():
             case "7":
                 view_movies_col()
             case "8":
-                break
+                return True
             case _:
                 print("Invalid choice! Please try again.")
 
 def view_collections():
+    """View all collections of the current user"""
     success, stats = get_collection_stats(cursor, current_user)
     
     if success:
@@ -143,6 +148,7 @@ def view_collections():
     input("\nPress Enter to continue...")
 
 def create_new_collection():
+    """Create a new collection"""
     name = input("\nEnter collection name: ")
     
     if name.strip():
@@ -154,6 +160,7 @@ def create_new_collection():
     input("\nPress Enter to continue...")
 
 def rename_col():
+    """Rename an existing collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -178,6 +185,7 @@ def rename_col():
     input("\nPress Enter to continue...")
 
 def delete_collection():
+    """Delete a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -202,6 +210,7 @@ def delete_collection():
     input("\nPress Enter to continue...")
 
 def add_movie_col():
+    """Add a movie to a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -214,6 +223,7 @@ def add_movie_col():
             
             # Verify ownership
             if collection_auth(cursor, current_user, coll_id):
+                search()
                 movie_id = int(input("Enter movie ID to add: "))
                 success, message = add_movie_to_collection(cursor, conn, coll_id, movie_id)
                 print(f"\n{message}")
@@ -227,6 +237,7 @@ def add_movie_col():
     input("\nPress Enter to continue...")
 
 def remove_movie_col():
+    """Remove a movie from a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -259,6 +270,7 @@ def remove_movie_col():
     input("\nPress Enter to continue...")
 
 def view_movies_col():
+    """View movies in a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -376,13 +388,33 @@ def search_movies_menu():
                     print("\nNo results to view!")
                     
             case "0":
-                break
+                return True
                 
             case _:
                 print("Invalid choice! Please try again.")
     
-    input("\nPress Enter to continue...")
 
+def search():
+    """Reusable method to prompt for searching"""
+    search_choice = input("Would you like to search for a movie first? (y/n): ").lower()
+    if search_choice == 'y':
+        search_term = input("Enter movie title to search: ")
+        success, movies = search_movies(cursor, search_term, 'title')
+        
+        if success and movies:
+            print("\nSearch Results:")
+            print("-" * 70)
+            print(f"{'ID':<8} {'Title':<50} {'Year':<6}")
+            print("-" * 70)
+            for movie in movies[:10]:  # Show max 10 results
+                year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
+                print(f"{movie['movie_id']:<8} {movie['title'][:50]:<50} {year:<6}")
+            print("-" * 70)
+        else:
+            print("\nNo movies found!")
+            input("\nPress Enter to continue...")
+            return
+    
 def display_movie_results(movies):
     """Display movie search results in a formatted table"""
     if not movies:
@@ -466,7 +498,7 @@ def rate_watch_menu():
             case "8":
                 view_watch_statistics()
             case "9":
-                break
+                return True
             case _:
                 print("Invalid choice! Please try again.")
 
@@ -475,25 +507,7 @@ def rate_movie_menu():
     print("\n--- RATE A MOVIE ---")
     
     # Option to search for a movie first
-    search_choice = input("Would you like to search for a movie first? (y/n): ").lower()
-    
-    if search_choice == 'y':
-        search_term = input("Enter movie title to search: ")
-        success, movies = search_movies(cursor, search_term, 'title')
-        
-        if success and movies:
-            print("\nSearch Results:")
-            print("-" * 70)
-            print(f"{'ID':<8} {'Title':<50} {'Year':<6}")
-            print("-" * 70)
-            for movie in movies[:10]:  # Show max 10 results
-                year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
-                print(f"{movie['movie_id']:<8} {movie['title'][:50]:<50} {year:<6}")
-            print("-" * 70)
-        else:
-            print("\nNo movies found!")
-            input("\nPress Enter to continue...")
-            return
+    search()
     
     try:
         movie_id = int(input("\nEnter movie ID to rate: "))

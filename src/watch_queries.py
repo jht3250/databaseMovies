@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 
 def watch_movie(cursor, conn, username, movie_id):
-    """Record that a user watched a movie"""
     try:
         cursor.execute("SELECT Title FROM MOVIES WHERE MovieID = %s", (movie_id,))
         movie = cursor.fetchone()
