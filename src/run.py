@@ -1,10 +1,7 @@
 import sys
 from dbconn import connect_to_db
 from user_queries import create_user, auth
-from collection_queries import (
-    create_collection, list_user_collections, 
-    rename_collection, delete_collection, get_collection_stats
-)
+from collection_queries import *
 
 #init global vars
 conn = None
@@ -96,7 +93,10 @@ def manage_collections():
         print("2. Create New Collection")
         print("3. Rename Collection")
         print("4. Delete Collection")
-        print("5. Back to Main Menu")
+        print("5. Add Movie to Collection")
+        print("6. Remove Movie from Collection")
+        print("7. View Movies in Collection")
+        print("8. Back to Main Menu")
         
         choice = input("\nEnter your choice: ")
         
@@ -106,10 +106,16 @@ def manage_collections():
             case "2":
                 create_new_collection()
             case "3":
-                rename_collection()
+                rename_col()
             case "4":
                 delete_collection()
             case "5":
+                add_movie_col()
+            case "6":
+                remove_movie_col()
+            case "7":
+                view_movies_col()
+            case "8":
                 break
             case _:
                 print("Invalid choice! Please try again.")
@@ -144,8 +150,7 @@ def create_new_collection():
     
     input("\nPress Enter to continue...")
 
-def rename_collection():
-    # First show collections
+def rename_col():
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -170,7 +175,6 @@ def rename_collection():
     input("\nPress Enter to continue...")
 
 def delete_collection():
-    # First show collections
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -193,6 +197,98 @@ def delete_collection():
         print("\nNo collections found!")
     
     input("\nPress Enter to continue...")
+
+def add_movie_col():
+    success, collections = list_user_collections(cursor, current_user)
+    
+    if success and collections:
+        print("\nYour Collections:")
+        for coll_id, coll_name in collections:
+            print(f"ID: {coll_id} - {coll_name}")
+        
+        try:
+            coll_id = int(input("\nEnter collection ID: "))
+            
+            # Verify ownership
+            if collection_auth(cursor, current_user, coll_id):
+                movie_id = int(input("Enter movie ID to add: "))
+                success, message = add_movie_to_collection(cursor, conn, coll_id, movie_id)
+                print(f"\n{message}")
+            else:
+                print("\nCollection not found or you don't have permission!")
+        except ValueError:
+            print("\nInvalid ID!")
+    else:
+        print("\nNo collections found! Create a collection first.")
+    
+    input("\nPress Enter to continue...")
+
+def remove_movie_col():
+    success, collections = list_user_collections(cursor, current_user)
+    
+    if success and collections:
+        print("\nYour Collections:")
+        for coll_id, coll_name in collections:
+            print(f"ID: {coll_id} - {coll_name}")
+        
+        try:
+            coll_id = int(input("\nEnter collection ID: "))
+            
+            if collection_auth(cursor, current_user, coll_id):
+                success, movies = list_movies_in_collection(cursor, coll_id)
+                if success and movies:
+                    print("\nMovies in this collection:")
+                    for movie in movies:
+                        print(f"ID: {movie[0]} - {movie[1]} ({movie[3]})")
+                    
+                    movie_id = int(input("\nEnter movie ID to remove: "))
+                    success, message = remove_movie_from_collection(cursor, conn, coll_id, movie_id)
+                    print(f"\n{message}")
+                else:
+                    print("\nNo movies in this collection!")
+            else:
+                print("\nCollection not found or you don't have permission!")
+        except ValueError:
+            print("\nInvalid ID!")
+    else:
+        print("\nNo collections found!")
+    
+    input("\nPress Enter to continue...")
+
+def view_movies_col():
+    success, collections = list_user_collections(cursor, current_user)
+    
+    if success and collections:
+        print("\nYour Collections:")
+        for coll_id, coll_name in collections:
+            print(f"ID: {coll_id} - {coll_name}")
+        
+        try:
+            coll_id = int(input("\nEnter collection ID to view: "))
+            
+            # Verify ownership
+            if (cursor, current_user, coll_id):
+                success, movies = list_movies_in_collection(cursor, coll_id)
+                if success and movies:
+                    print("\nMovies in this collection:")
+                    print("-" * 70)
+                    print(f"{'ID':<8} {'Title':<40} {'Length':<10} {'Rating':<8}")
+                    print("-" * 70)
+                    for movie in movies:
+                        length_str = f"{movie[2]} min" if movie[2] else "N/A"
+                        print(f"{movie[0]:<8} {movie[1][:40]:<40} {length_str:<10} {movie[3]:<8}")
+                    print("-" * 70)
+                else:
+                    print("\nNo movies in this collection!")
+            else:
+                print("\nCollection not found or you don't have permission!")
+        except ValueError:
+            print("\nInvalid ID!")
+    else:
+        print("\nNo collections found!")
+    
+    input("\nPress Enter to continue...")
+
 
 def main():
     global conn, cursor
