@@ -43,7 +43,7 @@ def mass_movie_insert():
     conn, cursor = dbconn.connect_to_db()
     query = ""
 
-    with open('../data/tmdb_5000_movies.csv', 'r') as file:
+    with open('../data/tmdb_5000_movies.csv', 'r', encoding='utf-8') as file:
         csv_reader = csv.reader(file, delimiter=',')
         next(csv_reader)
 
@@ -98,7 +98,7 @@ def mass_actor_insert():
     conn, cursor = dbconn.connect_to_db()
     query = ""
 
-    with open('../data/tmdb_5000_credits.csv', 'r') as file:
+    with open('../data/tmdb_5000_credits.csv', 'r', encoding='utf-8') as file:
         csv_reader = csv.reader(file, delimiter=',')
         next(csv_reader)
 
