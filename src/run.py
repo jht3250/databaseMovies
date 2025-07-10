@@ -4,6 +4,7 @@ from user_queries import create_user, auth
 from collection_queries import *
 from movie_queries import search_movies, sort_movies, get_movie_details
 from rating_queries import rate_movie, get_user_rating, list_user_ratings, remove_rating, get_top_rated_movies
+from watch_queries import watch_movie, watch_collection, get_watch_history, get_user_watch_stats, get_recently_watched
 
 #init global vars
 conn = None
@@ -211,6 +212,7 @@ def add_movie_col():
         try:
             coll_id = int(input("\nEnter collection ID: "))
             
+            # Verify ownership
             if collection_auth(cursor, current_user, coll_id):
                 movie_id = int(input("Enter movie ID to add: "))
                 success, message = add_movie_to_collection(cursor, conn, coll_id, movie_id)
@@ -267,6 +269,7 @@ def view_movies_col():
         try:
             coll_id = int(input("\nEnter collection ID to view: "))
             
+            # Verify ownership
             if (cursor, current_user, coll_id):
                 success, movies = list_movies_in_collection(cursor, coll_id)
                 if success and movies:
@@ -290,7 +293,8 @@ def view_movies_col():
     input("\nPress Enter to continue...")
 
 def search_movies_menu():
-    search_results = []
+    """Movie search submenu"""
+    search_results = []  # Store results for re-sorting
     
     while True:
         print("\n--- MOVIE SEARCH ---")
@@ -314,6 +318,7 @@ def search_movies_menu():
         
         match choice:
             case "1" | "2" | "3" | "4" | "5":
+                # Perform new search
                 search_types = {
                     "1": ("title", "Enter movie title: "),
                     "2": ("cast", "Enter cast member name: "),
@@ -336,6 +341,7 @@ def search_movies_menu():
                     print("\nSearch term cannot be empty!")
                     
             case "6" | "7" | "8" | "9":
+                # Sort existing results
                 if search_results:
                     sort_options = {
                         "6": "title",
@@ -355,6 +361,7 @@ def search_movies_menu():
                     print("\nNo results to sort!")
                     
             case "10":
+                # View movie details
                 if search_results:
                     try:
                         movie_id = int(input("\nEnter movie ID for details: "))
@@ -387,7 +394,7 @@ def display_movie_results(movies):
     print(f"{'ID':<8} {'Title':<40} {'Year':<6} {'Rating':<6} {'Length':<8} {'User Rating':<12}")
     print("-" * 120)
     
-    for movie in movies[:20]:  
+    for movie in movies[:20]:  # Show max 20 results
         year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
         length = f"{movie['length']} min" if movie['length'] else 'N/A'
         user_rating = f"{movie['avg_user_rating']}/5 ({movie['rating_count']})" if movie['rating_count'] > 0 else 'Not rated'
@@ -399,6 +406,7 @@ def display_movie_results(movies):
     if len(movies) > 20:
         print(f"\nShowing first 20 results of {len(movies)} total.")
     
+    # Show additional info
     print("\nAdditional Information (first 5 movies):")
     for movie in movies[:5]:
         print(f"\n{movie['title']}:")
@@ -432,9 +440,11 @@ def rate_watch_menu():
         print("2. View My Ratings")
         print("3. Remove a Rating")
         print("4. View Top Rated Movies")
-        print("5. Watch a Movie (To be implemented)")
-        print("6. Watch Collection (To be implemented)")
-        print("7. Back to Main Menu")
+        print("5. Watch a Movie")
+        print("6. Watch Collection")
+        print("7. View Watch History")
+        print("8. View Watch Statistics")
+        print("9. Back to Main Menu")
         
         choice = input("\nEnter your choice: ")
         
@@ -448,19 +458,23 @@ def rate_watch_menu():
             case "4":
                 view_top_rated()
             case "5":
-                print("\nWatch Movie - To be implemented")
-                input("\nPress Enter to continue...")
+                watch_movie_menu()
             case "6":
-                print("\nWatch Collection - To be implemented")
-                input("\nPress Enter to continue...")
+                watch_collection_menu()
             case "7":
+                view_watch_history()
+            case "8":
+                view_watch_statistics()
+            case "9":
                 break
             case _:
                 print("Invalid choice! Please try again.")
 
 def rate_movie_menu():
+    """Rate a movie"""
     print("\n--- RATE A MOVIE ---")
     
+    # Option to search for a movie first
     search_choice = input("Would you like to search for a movie first? (y/n): ").lower()
     
     if search_choice == 'y':
@@ -472,7 +486,7 @@ def rate_movie_menu():
             print("-" * 70)
             print(f"{'ID':<8} {'Title':<50} {'Year':<6}")
             print("-" * 70)
-            for movie in movies[:10]: 
+            for movie in movies[:10]:  # Show max 10 results
                 year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
                 print(f"{movie['movie_id']:<8} {movie['title'][:50]:<50} {year:<6}")
             print("-" * 70)
@@ -484,6 +498,7 @@ def rate_movie_menu():
     try:
         movie_id = int(input("\nEnter movie ID to rate: "))
         
+        # Show current rating if exists
         success, current_rating = get_user_rating(cursor, current_user, movie_id)
         if success and current_rating:
             print(f"Your current rating: {current_rating} stars")
@@ -502,6 +517,7 @@ def rate_movie_menu():
     input("\nPress Enter to continue...")
 
 def view_my_ratings():
+    """View all user's ratings"""
     success, ratings = list_user_ratings(cursor, current_user)
     
     if success:
@@ -519,6 +535,7 @@ def view_my_ratings():
             print("-" * 80)
             print(f"\nTotal movies rated: {len(ratings)}")
             
+            # Calculate average rating
             avg_rating = sum(r[2] for r in ratings) / len(ratings)
             print(f"Your average rating: {avg_rating:.1f} stars")
         else:
@@ -529,6 +546,8 @@ def view_my_ratings():
     input("\nPress Enter to continue...")
 
 def remove_rating_menu():
+    """Remove a rating"""
+    # First show user's ratings
     success, ratings = list_user_ratings(cursor, current_user)
     
     if success and ratings:
@@ -556,6 +575,7 @@ def remove_rating_menu():
     input("\nPress Enter to continue...")
 
 def view_top_rated():
+    """View top rated movies"""
     print("\n--- TOP RATED MOVIES ---")
     
     try:
@@ -583,6 +603,161 @@ def view_top_rated():
         print("\nInvalid input! Using default of 10.")
         view_top_rated()
         return
+    
+    input("\nPress Enter to continue...")
+
+def watch_movie_menu():
+    print("\n--- WATCH A MOVIE ---")
+    
+    choice = input("1. Enter Movie ID\n2. Search for Movie\n3. View Recently Watched\n\nChoice: ")
+    
+    movie_id = None
+    
+    if choice == "2":
+        search_term = input("Enter movie title to search: ")
+        success, movies = search_movies(cursor, search_term, 'title')
+        
+        if success and movies:
+            print("\nSearch Results:")
+            print("-" * 70)
+            print(f"{'ID':<8} {'Title':<50} {'Year':<6}")
+            print("-" * 70)
+            for movie in movies[:10]:
+                year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
+                print(f"{movie['movie_id']:<8} {movie['title'][:50]:<50} {year:<6}")
+            print("-" * 70)
+        else:
+            print("\nNo movies found!")
+            input("\nPress Enter to continue...")
+            return
+            
+    elif choice == "3":
+        success, recent = get_recently_watched(cursor, current_user, 10)
+        if success and recent:
+            print("\nRecently Watched:")
+            print("-" * 70)
+            print(f"{'ID':<8} {'Title':<40} {'Last Watched':<20}")
+            print("-" * 70)
+            for movie_id_rec, title, mpaa, length, last_watched in recent:
+                print(f"{movie_id_rec:<8} {title[:40]:<40} {last_watched.strftime('%Y-%m-%d %H:%M'):<20}")
+            print("-" * 70)
+        else:
+            print("\nNo recently watched movies!")
+            input("\nPress Enter to continue...")
+            return
+    
+    try:
+        if not movie_id:
+            movie_id = int(input("\nEnter movie ID to watch: "))
+        
+        success, message = watch_movie(cursor, conn, current_user, movie_id)
+        print(f"\n{message}")
+        
+    except ValueError:
+        print("\nInvalid movie ID!")
+    
+    input("\nPress Enter to continue...")
+
+def watch_collection_menu():
+    success, collections = list_user_collections(cursor, current_user)
+    
+    if success and collections:
+        print("\n--- WATCH COLLECTION ---")
+        print("\nYour Collections:")
+        for coll_id, coll_name in collections:
+            print(f"ID: {coll_id} - {coll_name}")
+        
+        try:
+            coll_id = int(input("\nEnter collection ID to watch: "))
+            
+            success, movies = list_movies_in_collection(cursor, coll_id)
+            if success and movies:
+                print(f"\nThis will mark {len(movies)} movies as watched:")
+                for movie in movies[:5]:
+                    print(f"  - {movie[1]}")
+                if len(movies) > 5:
+                    print(f"  ... and {len(movies) - 5} more")
+                
+                confirm = input("\nContinue? (y/n): ").lower()
+                if confirm == 'y':
+                    success, message = watch_collection(cursor, conn, current_user, coll_id)
+                    print(f"\n{message}")
+                else:
+                    print("\nWatch cancelled.")
+            else:
+                print("\nNo movies in this collection!")
+                
+        except ValueError:
+            print("\nInvalid collection ID!")
+    else:
+        print("\nNo collections found!")
+    
+    input("\nPress Enter to continue...")
+
+def view_watch_history():
+    print("\n--- WATCH HISTORY ---")
+    
+    limit = input("How many entries to show? (default: 20): ") or "20"
+    try:
+        limit = int(limit)
+    except ValueError:
+        limit = 20
+    
+    success, history = get_watch_history(cursor, current_user, limit)
+    
+    if success:
+        if history:
+            print(f"\nYour Recent Watch History (last {limit} entries):")
+            print("-" * 90)
+            print(f"{'ID':<8} {'Title':<35} {'Watched':<20} {'Length':<10} {'Rating':<8}")
+            print("-" * 90)
+            
+            for movie_id, title, watch_time, length, mpaa in history:
+                length_str = f"{length} min" if length else "N/A"
+                print(f"{movie_id:<8} {title[:35]:<35} {watch_time.strftime('%Y-%m-%d %H:%M'):<20} {length_str:<10} {mpaa:<8}")
+            
+            print("-" * 90)
+        else:
+            print("\nNo watch history found!")
+    else:
+        print(f"\nError: {history}")
+    
+    input("\nPress Enter to continue...")
+
+def view_watch_statistics():
+    print("\n---WATCH STATISTICS---")
+    
+    success, stats = get_user_watch_stats(cursor, current_user)
+    
+    if success:
+        print(f"\nYour Watch Statistics:")
+        print("-" * 50)
+        print(f"Unique Movies Watched: {stats['unique_movies']}")
+        print(f"Total Views: {stats['total_watches']}")
+        print(f"Total Watch Time: {stats['total_hours']} hours {stats['total_minutes'] % 60} minutes")
+        print(f"Watches This Week: {stats['recent_watches']}")
+        
+        if stats['most_watched']:
+            movie_id, title, count = stats['most_watched']
+            print(f"\nMost Watched Movie:")
+            print(f"  '{title}' - watched {count} times")
+        
+        if stats['total_watches'] > 0:
+            cursor.execute("""
+                SELECT MIN(WatchDateTime) 
+                FROM Watches 
+                WHERE Username = %s
+            """, (current_user,))
+            first_watch = cursor.fetchone()[0]
+            
+            if first_watch:
+                days_since_first = (datetime.now() - first_watch).days + 1
+                avg_per_day = stats['total_watches'] / days_since_first
+                print(f"\nAverage watches per day: {avg_per_day:.2f}")
+        
+        print("-" * 50)
+    else:
+        print(f"\nError: {stats}")
     
     input("\nPress Enter to continue...")
 
