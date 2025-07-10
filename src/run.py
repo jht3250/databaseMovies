@@ -1,3 +1,4 @@
+from datetime import datetime
 import sys
 from dbconn import connect_to_db
 from user_queries import create_user, auth
@@ -5,6 +6,10 @@ from collection_queries import *
 from movie_queries import search_movies, sort_movies, get_movie_details
 from rating_queries import rate_movie, get_user_rating, list_user_ratings, remove_rating, get_top_rated_movies
 from watch_queries import watch_movie, watch_collection, get_watch_history, get_user_watch_stats, get_recently_watched
+from social_queries import (
+    search_users_by_email, follow_user, unfollow_user, get_followers, 
+    get_following, get_following_activity
+)
 
 #init global vars
 conn = None
@@ -30,8 +35,9 @@ def create_account():
     password = input("Password: ")
     first_name = input("First Name: ")
     last_name = input("Last Name: ")
+    email = input("Email: ")
 
-    success, message = create_user(cursor, conn, username, password, first_name, last_name)
+    success, message = create_user(cursor, conn, username, password, first_name, last_name, email)
 
     print(f"\n{message}")
 
@@ -39,8 +45,7 @@ def create_account():
         print("You can now login with your new account.\n")
 
 def menu():
-    """Display the main menu and return user's choice"""
-    print("Movie System")
+    print("\nMovie System")
     print("-------------------------")
 
     if current_user:
@@ -59,7 +64,6 @@ def menu():
     return input("Please select an option: ")
 
 def logged_in(choice):
-    """Options for logged-in users"""
     match choice:
         case "1":
             return manage_collections()
@@ -68,7 +72,7 @@ def logged_in(choice):
         case "3":
             return rate_watch_menu()
         case "4":
-            print("\nSocial Features - To be implemented")
+            return social_features_menu()
         case "5":
             global current_user
             current_user = None
@@ -79,7 +83,6 @@ def logged_in(choice):
             print("Invalid choice! Please try again.")
 
 def guest(choice):
-    """Guest user options"""
     match choice:
         case "1":
             login()
@@ -93,7 +96,6 @@ def guest(choice):
     return True
 
 def manage_collections():
-    """Manage user collections"""
     while True:
         print("\n---COLLECTION MANAGEMENT---")
         print("1. View My Collections")
@@ -128,7 +130,6 @@ def manage_collections():
                 print("Invalid choice! Please try again.")
 
 def view_collections():
-    """View all collections of the current user"""
     success, stats = get_collection_stats(cursor, current_user)
     
     if success:
@@ -148,7 +149,6 @@ def view_collections():
     input("\nPress Enter to continue...")
 
 def create_new_collection():
-    """Create a new collection"""
     name = input("\nEnter collection name: ")
     
     if name.strip():
@@ -160,7 +160,6 @@ def create_new_collection():
     input("\nPress Enter to continue...")
 
 def rename_col():
-    """Rename an existing collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -185,7 +184,6 @@ def rename_col():
     input("\nPress Enter to continue...")
 
 def delete_collection():
-    """Delete a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -210,7 +208,6 @@ def delete_collection():
     input("\nPress Enter to continue...")
 
 def add_movie_col():
-    """Add a movie to a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -223,7 +220,6 @@ def add_movie_col():
             
             # Verify ownership
             if collection_auth(cursor, current_user, coll_id):
-                search()
                 movie_id = int(input("Enter movie ID to add: "))
                 success, message = add_movie_to_collection(cursor, conn, coll_id, movie_id)
                 print(f"\n{message}")
@@ -237,7 +233,6 @@ def add_movie_col():
     input("\nPress Enter to continue...")
 
 def remove_movie_col():
-    """Remove a movie from a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -270,7 +265,6 @@ def remove_movie_col():
     input("\nPress Enter to continue...")
 
 def view_movies_col():
-    """View movies in a specific collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -394,27 +388,6 @@ def search_movies_menu():
                 print("Invalid choice! Please try again.")
     
 
-def search():
-    """Reusable method to prompt for searching"""
-    search_choice = input("Would you like to search for a movie first? (y/n): ").lower()
-    if search_choice == 'y':
-        search_term = input("Enter movie title to search: ")
-        success, movies = search_movies(cursor, search_term, 'title')
-        
-        if success and movies:
-            print("\nSearch Results:")
-            print("-" * 70)
-            print(f"{'ID':<8} {'Title':<50} {'Year':<6}")
-            print("-" * 70)
-            for movie in movies[:10]:  # Show max 10 results
-                year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
-                print(f"{movie['movie_id']:<8} {movie['title'][:50]:<50} {year:<6}")
-            print("-" * 70)
-        else:
-            print("\nNo movies found!")
-            input("\nPress Enter to continue...")
-            return
-    
 def display_movie_results(movies):
     """Display movie search results in a formatted table"""
     if not movies:
@@ -507,7 +480,25 @@ def rate_movie_menu():
     print("\n--- RATE A MOVIE ---")
     
     # Option to search for a movie first
-    search()
+    search_choice = input("Would you like to search for a movie first? (y/n): ").lower()
+    
+    if search_choice == 'y':
+        search_term = input("Enter movie title to search: ")
+        success, movies = search_movies(cursor, search_term, 'title')
+        
+        if success and movies:
+            print("\nSearch Results:")
+            print("-" * 70)
+            print(f"{'ID':<8} {'Title':<50} {'Year':<6}")
+            print("-" * 70)
+            for movie in movies[:10]:  # Show max 10 results
+                year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
+                print(f"{movie['movie_id']:<8} {movie['title'][:50]:<50} {year:<6}")
+            print("-" * 70)
+        else:
+            print("\nNo movies found!")
+            input("\nPress Enter to continue...")
+            return
     
     try:
         movie_id = int(input("\nEnter movie ID to rate: "))
@@ -621,8 +612,10 @@ def view_top_rated():
     input("\nPress Enter to continue...")
 
 def watch_movie_menu():
+    """Watch a movie"""
     print("\n--- WATCH A MOVIE ---")
     
+    # Option to see recently watched or search
     choice = input("1. Enter Movie ID\n2. Search for Movie\n3. View Recently Watched\n\nChoice: ")
     
     movie_id = None
@@ -664,6 +657,7 @@ def watch_movie_menu():
         if not movie_id:
             movie_id = int(input("\nEnter movie ID to watch: "))
         
+        # Record the watch
         success, message = watch_movie(cursor, conn, current_user, movie_id)
         print(f"\n{message}")
         
@@ -673,6 +667,7 @@ def watch_movie_menu():
     input("\nPress Enter to continue...")
 
 def watch_collection_menu():
+    """Watch an entire collection"""
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -684,10 +679,11 @@ def watch_collection_menu():
         try:
             coll_id = int(input("\nEnter collection ID to watch: "))
             
+            # Show what's in the collection first
             success, movies = list_movies_in_collection(cursor, coll_id)
             if success and movies:
                 print(f"\nThis will mark {len(movies)} movies as watched:")
-                for movie in movies[:5]:
+                for movie in movies[:5]:  # Show first 5
                     print(f"  - {movie[1]}")
                 if len(movies) > 5:
                     print(f"  ... and {len(movies) - 5} more")
@@ -709,6 +705,7 @@ def watch_collection_menu():
     input("\nPress Enter to continue...")
 
 def view_watch_history():
+    """View watch history"""
     print("\n--- WATCH HISTORY ---")
     
     limit = input("How many entries to show? (default: 20): ") or "20"
@@ -739,7 +736,8 @@ def view_watch_history():
     input("\nPress Enter to continue...")
 
 def view_watch_statistics():
-    print("\n---WATCH STATISTICS---")
+    """View comprehensive watch statistics"""
+    print("\n--- WATCH STATISTICS ---")
     
     success, stats = get_user_watch_stats(cursor, current_user)
     
@@ -772,6 +770,161 @@ def view_watch_statistics():
         print("-" * 50)
     else:
         print(f"\nError: {stats}")
+    
+    input("\nPress Enter to continue...")
+
+def social_features_menu():
+    """Social features submenu"""
+    while True:
+        print("\n---SOCIAL FEATURES---")
+        print("1. Search Users")
+        print("2. View Following")
+        print("3. View Followers")
+        print("4. Following Activity Feed")
+        print("5. Back to Main Menu")
+        
+        choice = input("\nEnter your choice: ")
+        
+        match choice:
+            case "1":
+                search_and_follow_users()
+            case "2":
+                view_following()
+            case "3":
+                view_followers()
+            case "4":
+                view_following_activity()
+            case "5":
+                return True
+            case _:
+                print("Invalid choice! Please try again.")
+
+def search_and_follow_users():
+    """Search for users and follow/unfollow them"""
+    print("\n---SEARCH USERS---")
+    
+    search_term = input("Enter email to search (or press Enter to see all): ")
+    
+    success, users = search_users_by_email(cursor, search_term, current_user)
+    
+    if success:
+        if users:
+            print("\nSearch Results:")
+            print("-" * 90)
+            print(f"{'#':<4} {'Username':<20} {'Name':<25} {'Email':<30} {'Status':<15}")
+            print("-" * 90)
+            
+            for idx, (username, first_name, last_name, email, is_following) in enumerate(users, 1):
+                status = "Following" if is_following else "Not Following"
+                full_name = f"{first_name} {last_name}"
+                print(f"{idx:<4} {username:<20} {full_name:<25} {email:<30} {status:<15}")
+            
+            print("-" * 90)
+            
+            # Action menu
+            print("\nActions:")
+            print("1. Follow a user")
+            print("2. Unfollow a user")
+            print("3. Back")
+            
+            action = input("\nChoice: ")
+            
+            if action in ["1", "2"]:
+                try:
+                    user_num = int(input("Enter user number: ")) - 1
+                    if 0 <= user_num < len(users):
+                        target_username = users[user_num][0]
+                        
+                        if action == "1":
+                            success, message = follow_user(cursor, conn, current_user, target_username)
+                        else:
+                            success, message = unfollow_user(cursor, conn, current_user, target_username)
+                        
+                        print(f"\n{message}")
+                    else:
+                        print("\nInvalid user number!")
+                except ValueError:
+                    print("\nInvalid input!")
+        else:
+            print("\nNo users found!")
+    else:
+        print(f"\nError: {users}")
+    
+    input("\nPress Enter to continue...")
+
+def view_following():
+    """View list of users you follow"""
+    success, following = get_following(cursor, current_user)
+    
+    if success:
+        if following:
+            print(f"\nYou are following {len(following)} users:")
+            print("-" * 70)
+            print(f"{'Username':<20} {'Name':<30} {'Following Since':<20}")
+            print("-" * 70)
+            
+            for username, first_name, last_name, follow_date in following:
+                print(f"{username:<20} {first_name + ' ' + last_name:<30} {follow_date.strftime('%Y-%m-%d'):<20}")
+            
+            print("-" * 70)
+            
+            # Option to unfollow
+            unfollow = input("\nWould you like to unfollow someone? (y/n): ").lower()
+            if unfollow == 'y':
+                username_to_unfollow = input("Enter username to unfollow: ")
+                success, message = unfollow_user(cursor, conn, current_user, username_to_unfollow)
+                print(f"\n{message}")
+        else:
+            print("\nYou are not following anyone yet!")
+    else:
+        print(f"\nError: {following}")
+    
+    input("\nPress Enter to continue...")
+
+def view_followers():
+    """View list of your followers"""
+    success, followers = get_followers(cursor, current_user)
+    
+    if success:
+        if followers:
+            print(f"\nYou have {len(followers)} followers:")
+            print("-" * 70)
+            print(f"{'Username':<20} {'Name':<30} {'Following Since':<20}")
+            print("-" * 70)
+            
+            for username, first_name, last_name, follow_date in followers:
+                print(f"{username:<20} {first_name + ' ' + last_name:<30} {follow_date.strftime('%Y-%m-%d'):<20}")
+            
+            print("-" * 70)
+        else:
+            print("\nYou have no followers yet!")
+    else:
+        print(f"\nError: {followers}")
+    
+    input("\nPress Enter to continue...")
+
+def view_following_activity():
+    """View recent movie activity from users you follow"""
+    success, activity = get_following_activity(cursor, current_user, 20)
+    
+    if success:
+        if activity:
+            print("\n--- FOLLOWING ACTIVITY FEED ---")
+            print("Recent activity from users you follow:")
+            print("-" * 90)
+            print(f"{'User':<15} {'Movie':<40} {'Activity':<20} {'When':<15}")
+            print("-" * 90)
+            
+            for username, first_name, last_name, title, watch_time, watched in activity:
+                user_display = f"{first_name} {last_name[0]}."
+                when = watch_time.strftime('%Y-%m-%d %H:%M')
+                print(f"{user_display:<15} {title[:40]:<40} {'Watched':<20} {when:<15}")
+            
+            print("-" * 90)
+        else:
+            print("\nNo recent activity from users you follow!")
+    else:
+        print(f"\nError: {activity}")
     
     input("\nPress Enter to continue...")
 

@@ -4,16 +4,16 @@ from datetime import datetime
 def hashpass(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-def create_user(cursor, conn, username, password, first_name, last_name):
+def create_user(cursor, conn, username, password, first_name, last_name, email):
     try:
         hashedpass = hashpass(password)
         curr_date = datetime.now().date()
 
         query = """
-            INSERT INTO USERS (Username, Password, FirstName, LastName, LastAccessed) VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO USERS (Username, Password, FirstName, LastName, Email, LastAccessed) VALUES (%s, %s, %s, %s, %s, %s)
         """
 
-        cursor.execute(query, (username, hashedpass, first_name, last_name, curr_date))
+        cursor.execute(query, (username, hashedpass, first_name, last_name, email, curr_date))
         conn.commit()
         return True, "Account created!"
     except Exception as e:
