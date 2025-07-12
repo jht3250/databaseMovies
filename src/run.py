@@ -117,7 +117,7 @@ def manage_collections():
             case "3":
                 rename_col()
             case "4":
-                delete_collection()
+                delete_col()
             case "5":
                 add_movie_col()
             case "6":
@@ -183,7 +183,7 @@ def rename_col():
     
     input("\nPress Enter to continue...")
 
-def delete_collection():
+def delete_col():
     success, collections = list_user_collections(cursor, current_user)
     
     if success and collections:
@@ -221,7 +221,7 @@ def add_movie_col():
             # Verify ownership
             if collection_auth(cursor, current_user, coll_id):
                 movie_id = int(input("Enter movie ID to add: "))
-                success, message = add_movie_to_collection(cursor, conn, coll_id, movie_id)
+                success, message = add_movie_to_collection(cursor, conn, coll_id, current_user, movie_id)
                 print(f"\n{message}")
             else:
                 print("\nCollection not found or you don't have permission!")
@@ -244,7 +244,7 @@ def remove_movie_col():
             coll_id = int(input("\nEnter collection ID: "))
             
             if collection_auth(cursor, current_user, coll_id):
-                success, movies = list_movies_in_collection(cursor, coll_id)
+                success, movies = list_movies_in_collection(cursor, coll_id, current_user)
                 if success and movies:
                     print("\nMovies in this collection:")
                     for movie in movies:
@@ -277,7 +277,7 @@ def view_movies_col():
             
             # Verify ownership
             if (cursor, current_user, coll_id):
-                success, movies = list_movies_in_collection(cursor, coll_id)
+                success, movies = list_movies_in_collection(cursor, coll_id, current_user)
                 if success and movies:
                     print("\nMovies in this collection:")
                     print("-" * 70)
@@ -680,7 +680,7 @@ def watch_collection_menu():
             coll_id = int(input("\nEnter collection ID to watch: "))
             
             # Show what's in the collection first
-            success, movies = list_movies_in_collection(cursor, coll_id)
+            success, movies = list_movies_in_collection(cursor, coll_id, current_user)
             if success and movies:
                 print(f"\nThis will mark {len(movies)} movies as watched:")
                 for movie in movies[:5]:  # Show first 5

@@ -8,12 +8,15 @@ def create_collection(cursor, conn, username, collection_name):
         if max_id is None:
             new_id = 1 
         else:
-            max_id + 1
+            max_id = max_id + 1
         
         query = """
             INSERT INTO Collection (CollectionID, Username, CollectionName) VALUES (%s, %s, %s)
         """
-        cursor.execute(query, (new_id, username, collection_name))
+        if max_id is None:
+            cursor.execute(query, (new_id, username, collection_name))
+        else:
+            cursor.execute(query, (max_id, username, collection_name))
         conn.commit()
         return True, "Collection created!"
     except Exception as e:
@@ -63,7 +66,7 @@ def get_collection_stats(cursor, username):
                 COALESCE(SUM(m.Length), 0) as total_runtime
             FROM Collection c
             LEFT JOIN Contains ct ON c.CollectionID = ct.CollectionID 
-            LEFT JOIN MOVIES m ON ct.MovieID = m.MovieID WHERE c.Username = %s
+            LEFT JOIN MOVIES m ON ct.MovieID = m.MovieID WHERE c.Username = %s 
             GROUP BY c.CollectionID, c.CollectionName
             ORDER BY c.CollectionName ASC
         """
@@ -86,12 +89,12 @@ def get_collection_stats(cursor, username):
     except Exception as e:
         return False, f"Error fetching collection stats: {e}"
     
-def add_movie_to_collection(cursor, conn, collection_id, movie_id):
+def add_movie_to_collection(cursor, conn, collection_id, username, movie_id):
     try:
         query = """
-            INSERT INTO Contains (CollectionID, MovieID) VALUES (%s, %s)
+            INSERT INTO Contains (CollectionID, username, MovieID) VALUES (%s, %s, %s)
         """
-        cursor.execute(query, (collection_id, movie_id))
+        cursor.execute(query, (collection_id, username, movie_id))
         conn.commit()
         return True, "Movie added to collection!"
     except Exception as e:
@@ -114,14 +117,14 @@ def remove_movie_from_collection(cursor, conn, collection_id, movie_id):
         conn.rollback()
         return False, f"Erorr removing movie: {e}"
 
-def list_movies_in_collection(cursor, collection_id):
+def list_movies_in_collection(cursor, collection_id, username):
     try:
         query = """
             SELECT m.MovieID, m.Title, m.Length, m.MMPA FROM MOVIES m 
-            JOIN Contains c ON m.MovieID = c.MovieID WHERE c.CollectionID = %s
+            JOIN Contains c ON m.MovieID = c.MovieID WHERE c.CollectionID = %s AND username = %s
             ORDER BY m.Title
         """
-        cursor.execute(query, (collection_id,))
+        cursor.execute(query, (collection_id, username))
         movies = cursor.fetchall()
         return True, movies
     except Exception as e:
