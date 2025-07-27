@@ -154,3 +154,83 @@ def search_movies_simple(cursor, search_term):
         return True, movies
     except Exception as e:
         return False, f"Error searching movies: {e}"
+
+def get_top_20_popular_movies(cursor):
+    try:
+        query = """
+            SELECT m.title, COUNT(*) as "count"
+            FROM watches w
+            INNER JOIN movies m ON w.movieid = m.movieid
+            WHERE w.watchdatetime >= now() - INTERVAL '90 days'
+            GROUP BY m.title
+            ORDER BY count DESC
+            LIMIT 20
+        """
+        cursor.execute(query)
+        movies = cursor.fetchall()
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching top 20 movies: {e}"
+
+def get_top_10_watched_movies_from_user(cursor, username):
+    try:
+        query = """
+            SELECT m.title, COUNT(*) as "count"
+            FROM watches w
+            INNER JOIN movies m ON w.movieid = m.movieid
+            WHERE w.username = %s
+            GROUP BY m.title
+            ORDER BY count DESC
+            LIMIT 10
+        """
+        cursor.execute(query, (username,))
+        movies = cursor.fetchall()
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching top 10 movies: {e}"
+
+def get_top_10_highly_rated_movies_from_user(cursor, username):
+    try:
+        query = """
+            SELECT m.title, r.starrating
+            FROM rates r
+            INNER JOIN movies m ON r.movieid = m.movieid
+            WHERE r.username = %s
+            ORDER BY r.starrating DESC
+            LIMIT 10
+        """
+        cursor.execute(query, (username,))
+        movies = cursor.fetchall()
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching top 10 movies: {e}"
+
+def get_top_20_popular_movies_from_followed(cursor, username):
+    try:
+        query = """
+            SELECT followedusername
+            from follows
+            WHERE followerusername = 'test2'
+            """
+        cursor.execute(query, (username,))
+        users = cursor.fetchall()
+        whereClause = f" WHERE w.username = '{users[0][0]}'"
+        for user in users[1:]:
+            whereClause += f" OR w.username = '{user[0]}'"
+
+        query = """
+            SELECT m.title, COUNT(*) as "count"
+            FROM watches w
+            INNER JOIN movies m ON w.movieid = m.movieid
+            """ + whereClause +""" 
+            GROUP BY m.title
+            ORDER BY count DESC
+            LIMIT 20
+            """
+
+        cursor.execute(query)
+        movies = cursor.fetchall()
+
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching top 10 movies: {e}"

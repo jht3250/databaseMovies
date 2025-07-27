@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS MOVIES;
-DROP TABLE IF EXISTS USERS;
-DROP TABLE IF EXISTS Collection;
+-- DROP TABLE IF EXISTS USERS;
+-- DROP TABLE IF EXISTS Collection;
 DROP TABLE IF EXISTS Platform;
 DROP TABLE IF EXISTS Person;
 DROP TABLE IF EXISTS Studio;
@@ -21,19 +21,19 @@ CREATE TABLE MOVIES(
     MMPA            varchar(10)
 );
 
-CREATE TABLE USERS(
-    FirstName       VARCHAR(100),
-    LastName        VARCHAR(100),
-    Username        VARCHAR(100) PRIMARY KEY UNIQUE,
-    Password        VARCHAR(100) NOT NULL,
-    LastAccessed    DATE
-);
-
-CREATE TABLE Collection(
-    CollectionID    int PRIMARY KEY ,
-    Username        VARCHAR(100) NOT NULL,
-    CollectionName  VARCHAR(100)
-);
+-- CREATE TABLE USERS(
+--     FirstName       VARCHAR(100),
+--     LastName        VARCHAR(100),
+--     Username        VARCHAR(100) PRIMARY KEY UNIQUE,
+--     Password        VARCHAR(100) NOT NULL,
+--     LastAccessed    DATE
+-- );
+--
+-- CREATE TABLE Collection(
+--     CollectionID    int PRIMARY KEY ,
+--     Username        VARCHAR(100) NOT NULL,
+--     CollectionName  VARCHAR(100)
+-- );
 
 CREATE TABLE Platform(
     PlatformID      int PRIMARY KEY,

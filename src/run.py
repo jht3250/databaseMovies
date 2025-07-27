@@ -3,7 +3,13 @@ import sys
 from dbconn import connect_to_db
 from user_queries import create_user, auth
 from collection_queries import *
-from movie_queries import search_movies, sort_movies, get_movie_details
+from movie_queries import (search_movies,
+                        sort_movies,
+                        get_movie_details,
+                        get_top_20_popular_movies,
+                        get_top_10_watched_movies_from_user,
+                        get_top_10_highly_rated_movies_from_user,
+                        get_top_20_popular_movies_from_followed)
 from rating_queries import rate_movie, get_user_rating, list_user_ratings, remove_rating, get_top_rated_movies
 from watch_queries import watch_movie, watch_collection, get_watch_history, get_user_watch_stats, get_recently_watched
 from social_queries import (
@@ -54,8 +60,9 @@ def menu():
         print("2. Search Movies")
         print("3. Rate/Watch Movies")
         print("4. Social Features")
-        print("5. Logout")
-        print("6. Exit")
+        print("5. Top Movies Stats")
+        print("6. Logout")
+        print("7. Exit")
     else: 
         print("\n1. Login")
         print("2. Create Account")
@@ -74,10 +81,12 @@ def logged_in(choice):
         case "4":
             return social_features_menu()
         case "5":
+            return top_movie_stats_menu()
+        case "6":
             global current_user
             current_user = None
             print("Logged out successfully!")
-        case "6":
+        case "7":
             return False
         case _:
             print("Invalid choice! Please try again.")
@@ -926,6 +935,82 @@ def view_following_activity():
     else:
         print(f"\nError: {activity}")
     
+    input("\nPress Enter to continue...")
+
+def top_movie_stats_menu():
+    """top movies submenu"""
+    while True:
+        print("\n---TOP MOVIES STATS---")
+        print("1. Show top 10 movies from you by rating")
+        print("2. Show top 10 movies from you by amount of watches")
+        print("3. Show top 20 most popular movies globally")
+        print("4. Show top 20 most popular movies by users you're following")
+        print("5. Show top 5 movies this month")
+        print("6. Back to Main Menu")
+
+        choice = input("\nEnter your choice: ")
+
+        match choice:
+            case "1":
+                view_top_10_highly_rated_movies_by_user()
+            case "2":
+                view_top_10_most_watched_movies_by_user()
+            case "3":
+                view_top_20_popular_movies()
+            case "4":
+                view_top_20_movies_by_followed()
+            case "5":
+                pass
+            case "6":
+                return True
+            case _:
+                print("Invalid choice! Please try again.")
+
+def view_top_20_popular_movies():
+    success, movies = get_top_20_popular_movies(cursor)
+    if success:
+        print("\n---TOP 20 POPULAR MOVIES---")
+        index = 1
+        for title, count in movies:
+            print(f"{index} - {title}")
+            index += 1
+    else:
+        print(f"\nError: {movies}")
+
+    input("\nPress Enter to continue...")
+
+def view_top_10_most_watched_movies_by_user():
+    success, movies = get_top_10_watched_movies_from_user(cursor, current_user)
+    if success:
+        print("\n---TOP 10 MOST WATCHED BY YOU---")
+        for title, count in movies:
+            print(f"{title} - {count} watches!")
+    else:
+        print(f"\nError: {movies}")
+    input("\nPress Enter to continue...")
+
+def view_top_10_highly_rated_movies_by_user():
+    success, movies = get_top_10_highly_rated_movies_from_user(cursor, current_user)
+    if success:
+        print("\n---TOP 10 HIGHLY RATED BY YOU---")
+        for title, rating in movies:
+            print(f"{title} - {rating} stars")
+    else:
+        print(f"\nError: {movies}")
+
+    input("\nPress Enter to continue...")
+
+def view_top_20_movies_by_followed():
+    success, movies = get_top_20_popular_movies_from_followed(cursor, current_user)
+    if success:
+        print("\n---TOP 20 POPULAR MOVIES BY FOLLOWING---")
+        index = 1
+        for title, count in movies:
+            print(f"{index} - {title}")
+            index += 1
+    else:
+        print(f"\nError: {movies}")
+
     input("\nPress Enter to continue...")
 
 def main():
