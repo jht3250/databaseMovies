@@ -92,7 +92,7 @@ def get_top_rated_movies(cursor, limit=10):
             FROM MOVIES m
             JOIN Rates r ON m.MovieID = r.MovieID
             GROUP BY m.MovieID, m.Title
-            HAVING COUNT(r.StarRating) >= 3  -- At least 3 ratings
+            HAVING COUNT(r.StarRating) >= 3
             ORDER BY avg_rating DESC, rating_count DESC
             LIMIT %s
         """

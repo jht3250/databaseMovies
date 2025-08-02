@@ -59,15 +59,15 @@ def delete_collection(cursor, conn, collection_id):
 def get_collection_stats(cursor, username):
     try:
         query = """
-            SELECT 
+            SELECT
                 c.CollectionID,
                 c.CollectionName,
                 COUNT(ct.MovieID) as movie_count,
                 COALESCE(SUM(m.Length), 0) as total_runtime
             FROM Collection c
-            LEFT JOIN Contains ct ON c.CollectionID = ct.CollectionID 
-            LEFT JOIN MOVIES m ON ct.MovieID = m.MovieID WHERE c.Username = %s 
-            GROUP BY c.CollectionID, c.CollectionName
+            LEFT JOIN Contains ct ON c.CollectionID = ct.CollectionID AND c.username = ct.username
+            LEFT JOIN MOVIES m ON ct.MovieID = m.MovieID where c.username = %s
+            GROUP BY c.CollectionID, c.CollectionName, c.username
             ORDER BY c.CollectionName ASC
         """
         cursor.execute(query, (username,))

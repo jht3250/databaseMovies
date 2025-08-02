@@ -37,7 +37,7 @@ def search_movies(cursor, search_term, search_type='title'):
             case 'genre':
                 where_clause = "WHERE m.MovieID IN (SELECT mg2.MovieID FROM Movie_Genre mg2 JOIN Genre g2 ON mg2.GenreID = g2.GenreID WHERE LOWER(g2.Name) LIKE LOWER(%s))"
             case 'release_date':
-                where_clause = "WHERE m.ReleaseDate LIKE %s"
+                where_clause = "WHERE EXTRACT(YEAR FROM m.ReleaseDate)::VARCHAR(4) LIKE %s"
                 search_param = f"%{search_term}%"
             
         group_by = """
@@ -96,7 +96,7 @@ def get_movie_details(cursor, movie_id):
                 STRING_AGG(DISTINCT p_dir.Name, ', ' ORDER BY p_dir.Name) as directors,
                 STRING_AGG(DISTINCT s.Name, ', ' ORDER BY s.Name) as studios,
                 STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
-                STRING_AGG(DISTINCT plat.Name || ' (' || mp.ReleaseDate || ')', ', ' ORDER BY plat.Name) as platforms,
+                STRING_AGG(DISTINCT plat.Name || ' (' || EXTRACT(YEAR FROM mp.ReleaseDate)::VARCHAR(4) || ')', ', ' ORDER BY plat.Name) as platforms,
                 AVG(r.StarRating) as avg_rating,
                 COUNT(DISTINCT r.Username) as rating_count
             FROM MOVIES m
@@ -209,28 +209,284 @@ def get_top_20_popular_movies_from_followed(cursor, username):
     try:
         query = """
             SELECT followedusername
-            from follows
-            WHERE followerusername = 'test2'
-            """
+            FROM follows
+            WHERE followerusername = %s
+        """
         cursor.execute(query, (username,))
         users = cursor.fetchall()
-        whereClause = f" WHERE w.username = '{users[0][0]}'"
-        for user in users[1:]:
-            whereClause += f" OR w.username = '{user[0]}'"
+        
+        if not users:
+            return True, []  
+        
+        followed_usernames = [user[0] for user in users]
 
         query = """
-            SELECT m.title, COUNT(*) as "count"
+            SELECT m.title, COUNT(*) as watch_count
             FROM watches w
             INNER JOIN movies m ON w.movieid = m.movieid
-            """ + whereClause +""" 
+            WHERE w.username = ANY(%s)
             GROUP BY m.title
-            ORDER BY count DESC
+            ORDER BY watch_count DESC
             LIMIT 20
-            """
-
-        cursor.execute(query)
+        """
+        
+        cursor.execute(query, (followed_usernames,))
         movies = cursor.fetchall()
-
+        
         return True, movies
     except Exception as e:
-        return False, f"Error fetching top 10 movies: {e}"
+        return False, f"Error fetching top movies from followed users: {e}"
+    
+def get_top_5_new_releases_this_month(cursor):
+    try:
+        query = """
+            SELECT DISTINCT
+                m.MovieID,
+                m.Title,
+                m.ReleaseDate,
+                m.MMPA,
+                STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
+                AVG(r.StarRating) as avg_rating,
+                COUNT(DISTINCT r.Username) as rating_count
+            FROM MOVIES m
+            LEFT JOIN Movie_Genre mg ON m.MovieID = mg.MovieID
+            LEFT JOIN Genre g ON mg.GenreID = g.GenreID
+            LEFT JOIN Rates r ON m.MovieID = r.MovieID
+            WHERE EXTRACT(MONTH FROM m.ReleaseDate) = EXTRACT(MONTH FROM CURRENT_DATE)
+                AND EXTRACT(YEAR FROM m.ReleaseDate) = EXTRACT(YEAR FROM CURRENT_DATE)
+            GROUP BY m.MovieID, m.Title, m.ReleaseDate, m.MMPA
+            ORDER BY m.ReleaseDate DESC
+            LIMIT 5
+        """
+        cursor.execute(query)
+        movies = cursor.fetchall()
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching new releases: {e}"
+
+def get_recommended_movies_for_user(cursor, username, limit=10):
+    try:
+        genre_preference_query = """
+            WITH user_genre_stats AS (
+                SELECT 
+                    g.GenreID,
+                    g.Name as genre_name,
+                    COUNT(DISTINCT w.MovieID) as watch_count,
+                    AVG(r.StarRating) as avg_rating
+                FROM Watches w
+                JOIN Movie_Genre mg ON w.MovieID = mg.MovieID
+                JOIN Genre g ON mg.GenreID = g.GenreID
+                LEFT JOIN Rates r ON w.MovieID = r.MovieID AND w.Username = r.Username
+                WHERE w.Username = %s
+                GROUP BY g.GenreID, g.Name
+                ORDER BY watch_count DESC, avg_rating DESC
+                LIMIT 3
+            )
+            SELECT GenreID, genre_name FROM user_genre_stats
+        """
+        
+        cursor.execute(genre_preference_query, (username,))
+        favorite_genres = cursor.fetchall()
+        
+        if not favorite_genres:
+            return get_top_rated_movies_general(cursor, limit)
+        
+        genre_ids = [g[0] for g in favorite_genres]
+        
+        recommendation_query = """
+            SELECT DISTINCT
+                m.MovieID,
+                m.Title,
+                m.ReleaseDate,
+                m.Length,
+                m.MMPA,
+                STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
+                AVG(r.StarRating) as avg_rating,
+                COUNT(DISTINCT r.Username) as rating_count,
+                COUNT(DISTINCT mg.GenreID) FILTER (WHERE mg.GenreID = ANY(%s)) as matching_genres
+            FROM MOVIES m
+            JOIN Movie_Genre mg ON m.MovieID = mg.MovieID
+            JOIN Genre g ON mg.GenreID = g.GenreID
+            LEFT JOIN Rates r ON m.MovieID = r.MovieID
+            WHERE m.MovieID NOT IN (
+                SELECT MovieID FROM Watches WHERE Username = %s
+            )
+            AND mg.GenreID = ANY(%s)
+            GROUP BY m.MovieID, m.Title, m.ReleaseDate, m.Length, m.MMPA
+            HAVING AVG(r.StarRating) >= 3.5 OR COUNT(r.Username) < 3
+            ORDER BY 
+                matching_genres DESC,
+                avg_rating DESC NULLS LAST,
+                rating_count DESC
+            LIMIT %s
+        """
+        
+        cursor.execute(recommendation_query, (genre_ids, username, genre_ids, limit))
+        recommendations = cursor.fetchall()
+        
+        if len(recommendations) < limit:
+            additional_query = """
+                SELECT DISTINCT
+                    m.MovieID,
+                    m.Title,
+                    m.ReleaseDate,
+                    m.Length,
+                    m.MMPA,
+                    STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
+                    AVG(r.StarRating) as avg_rating,
+                    COUNT(DISTINCT r.Username) as rating_count,
+                    0 as matching_genres
+                FROM MOVIES m
+                LEFT JOIN Movie_Genre mg ON m.MovieID = mg.MovieID
+                LEFT JOIN Genre g ON mg.GenreID = g.GenreID
+                LEFT JOIN Rates r ON m.MovieID = r.MovieID
+                WHERE m.MovieID NOT IN (
+                    SELECT MovieID FROM Watches WHERE Username = %s
+                )
+                AND m.MovieID NOT IN (%s)
+                GROUP BY m.MovieID, m.Title, m.ReleaseDate, m.Length, m.MMPA
+                HAVING COUNT(r.Username) >= 5 AND AVG(r.StarRating) >= 4.0
+                ORDER BY avg_rating DESC, rating_count DESC
+                LIMIT %s
+            """
+            
+            existing_ids = [r[0] for r in recommendations] or [-1]
+            cursor.execute(additional_query, (username, tuple(existing_ids), limit - len(recommendations)))
+            additional = cursor.fetchall()
+            recommendations.extend(additional)
+        
+        return True, recommendations
+        
+    except Exception as e:
+        return False, f"Error getting recommendations: {e}"
+
+def get_recommended_movies_collaborative(cursor, username, limit=10):
+    try:
+        similar_users_query = """
+            WITH user_ratings AS (
+                SELECT MovieID, StarRating
+                FROM Rates
+                WHERE Username = %s AND StarRating >= 4
+            ),
+            similar_users AS (
+                SELECT 
+                    r.Username,
+                    COUNT(DISTINCT r.MovieID) as common_movies,
+                    AVG(ABS(r.StarRating - ur.StarRating)) as rating_difference
+                FROM Rates r
+                JOIN user_ratings ur ON r.MovieID = ur.MovieID
+                WHERE r.Username != %s
+                    AND r.StarRating >= 4
+                GROUP BY r.Username
+                HAVING COUNT(DISTINCT r.MovieID) >= 3
+                ORDER BY common_movies DESC, rating_difference ASC
+                LIMIT 10
+            )
+            SELECT Username FROM similar_users
+        """
+        
+        cursor.execute(similar_users_query, (username, username))
+        similar_users = cursor.fetchall()
+        
+        if not similar_users:
+            return get_recommended_movies_for_user(cursor, username, limit)
+        
+        similar_usernames = [u[0] for u in similar_users]
+
+        collaborative_query = """
+            SELECT 
+                m.MovieID,
+                m.Title,
+                m.ReleaseDate,
+                m.Length,
+                m.MMPA,
+                STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
+                AVG(r.StarRating) as avg_rating_all,
+                COUNT(DISTINCT r.Username) as total_ratings,
+                AVG(r.StarRating) FILTER (WHERE r.Username = ANY(%s)) as avg_rating_similar,
+                COUNT(DISTINCT r.Username) FILTER (WHERE r.Username = ANY(%s)) as similar_user_ratings
+            FROM MOVIES m
+            LEFT JOIN Movie_Genre mg ON m.MovieID = mg.MovieID
+            LEFT JOIN Genre g ON mg.GenreID = g.GenreID
+            LEFT JOIN Rates r ON m.MovieID = r.MovieID
+            WHERE m.MovieID NOT IN (
+                SELECT MovieID FROM Watches WHERE Username = %s
+            )
+            AND m.MovieID IN (
+                SELECT MovieID FROM Rates 
+                WHERE Username = ANY(%s) AND StarRating >= 4
+            )
+            GROUP BY m.MovieID, m.Title, m.ReleaseDate, m.Length, m.MMPA
+            ORDER BY 
+                similar_user_ratings DESC,
+                avg_rating_similar DESC,
+                avg_rating_all DESC
+            LIMIT %s
+        """
+        
+        cursor.execute(collaborative_query, 
+                      (similar_usernames, similar_usernames, username, similar_usernames, limit))
+        recommendations = cursor.fetchall()
+        
+        return True, recommendations
+        
+    except Exception as e:
+        return False, f"Error getting collaborative recommendations: {e}"
+
+def get_top_rated_movies_general(cursor, limit=10):
+    try:
+        query = """
+            SELECT 
+                m.MovieID,
+                m.Title,
+                m.ReleaseDate,
+                m.Length,
+                m.MMPA,
+                STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
+                AVG(r.StarRating) as avg_rating,
+                COUNT(DISTINCT r.Username) as rating_count,
+                0 as matching_genres
+            FROM MOVIES m
+            LEFT JOIN Movie_Genre mg ON m.MovieID = mg.MovieID
+            LEFT JOIN Genre g ON mg.GenreID = g.GenreID
+            LEFT JOIN Rates r ON m.MovieID = r.MovieID
+            GROUP BY m.MovieID, m.Title, m.ReleaseDate, m.Length, m.MMPA
+            HAVING COUNT(r.Username) >= 5
+            ORDER BY avg_rating DESC, rating_count DESC
+            LIMIT %s
+        """
+        cursor.execute(query, (limit,))
+        movies = cursor.fetchall()
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching top rated movies: {e}"
+    
+def get_top_20_movies_last_90_days(cursor):
+    """Get top 20 most watched movies in the last 90 days"""
+    try:
+        query = """
+            SELECT 
+                m.MovieID,
+                m.Title,
+                m.ReleaseDate,
+                m.MMPA,
+                COUNT(w.MovieID) as watch_count,
+                COUNT(DISTINCT w.Username) as unique_viewers,
+                STRING_AGG(DISTINCT g.Name, ', ' ORDER BY g.Name) as genres,
+                AVG(r.StarRating) as avg_rating,
+                COUNT(DISTINCT r.Username) as rating_count
+            FROM Watches w
+            INNER JOIN MOVIES m ON w.MovieID = m.MovieID
+            LEFT JOIN Movie_Genre mg ON m.MovieID = mg.MovieID
+            LEFT JOIN Genre g ON mg.GenreID = g.GenreID
+            LEFT JOIN Rates r ON m.MovieID = r.MovieID
+            WHERE w.WatchDateTime >= CURRENT_DATE - INTERVAL '90 days'
+            GROUP BY m.MovieID, m.Title, m.ReleaseDate, m.MMPA
+            ORDER BY watch_count DESC, unique_viewers DESC
+            LIMIT 20
+        """
+        cursor.execute(query)
+        movies = cursor.fetchall()
+        return True, movies
+    except Exception as e:
+        return False, f"Error fetching top movies from last 90 days: {e}"

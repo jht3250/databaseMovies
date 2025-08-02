@@ -1,15 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 from dbconn import connect_to_db
 from user_queries import create_user, auth
 from collection_queries import *
-from movie_queries import (search_movies,
-                        sort_movies,
-                        get_movie_details,
-                        get_top_20_popular_movies,
-                        get_top_10_watched_movies_from_user,
-                        get_top_10_highly_rated_movies_from_user,
-                        get_top_20_popular_movies_from_followed)
+from movie_queries import *
 from rating_queries import rate_movie, get_user_rating, list_user_ratings, remove_rating, get_top_rated_movies
 from watch_queries import watch_movie, watch_collection, get_watch_history, get_user_watch_stats, get_recently_watched
 from social_queries import (
@@ -61,8 +55,10 @@ def menu():
         print("3. Rate/Watch Movies")
         print("4. Social Features")
         print("5. Top Movies Stats")
-        print("6. Logout")
-        print("7. Exit")
+        print("6. Movie Recommendations")
+        print("7. View My Profile")
+        print("8. Logout")
+        print("9. Exit")
     else: 
         print("\n1. Login")
         print("2. Create Account")
@@ -83,13 +79,18 @@ def logged_in(choice):
         case "5":
             return top_movie_stats_menu()
         case "6":
+            return movie_recommendations_menu()
+        case "7":
+            return view_user_profile() 
+        case "8":
             global current_user
             current_user = None
             print("Logged out successfully!")
-        case "7":
+        case "9":
             return False
         case _:
             print("Invalid choice! Please try again.")
+    return True
 
 def guest(choice):
     match choice:
@@ -409,7 +410,7 @@ def display_movie_results(movies):
     print("-" * 120)
     
     for movie in movies[:20]:  # Show max 20 results
-        year = movie['release_date'][:4] if movie['release_date'] else 'N/A'
+        year = movie['release_date'].strftime('%Y') if movie['release_date'] else 'N/A'
         length = f"{movie['length']} min" if movie['length'] else 'N/A'
         user_rating = f"{movie['avg_user_rating']}/5 ({movie['rating_count']})" if movie['rating_count'] > 0 else 'Not rated'
         
@@ -937,8 +938,181 @@ def view_following_activity():
     
     input("\nPress Enter to continue...")
 
+def view_user_profile():
+    print(f"\n{'='*80}")
+    print(f"USER PROFILE: {current_user}")
+    print(f"{'='*80}")
+    
+    # Get collection count
+    success, collections = list_user_collections(cursor, current_user)
+    collection_count = len(collections) if success else 0
+    
+    # Get follower count
+    success, followers = get_followers(cursor, current_user)
+    follower_count = len(followers) if success else 0
+    
+    # Get following count
+    success, following = get_following(cursor, current_user)
+    following_count = len(following) if success else 0
+    
+    # Display basic stats
+    print(f"STATS")
+    print(f"{'─'*40}")
+    print(f"Collections: {collection_count}")
+    print(f"Followers: {follower_count}")
+    print(f"Following: {following_count}")
+    
+    # Get and display top 10 rated movies
+    print(f"\nTOP 10 RATED MOVIES")
+    print(f"{'─'*60}")
+    
+    success, top_rated = get_top_10_highly_rated_movies_from_user(cursor, current_user)
+    if success and top_rated:
+        print(f"{'#':<4} {'Title':<40} {'Rating':<15}")
+        print(f"{'─'*60}")
+        for idx, (title, rating) in enumerate(top_rated, 1):
+            stars = '★' * rating + '☆' * (5 - rating)
+            print(f"{idx:<4} {title[:40]:<40} {stars}")
+    else:
+        print("No rated movies yet!")
+    
+    # Get and display top 10 watched movies
+    print(f"\nTOP 10 MOST WATCHED MOVIES")
+    print(f"{'─'*60}")
+    
+    success, top_watched = get_top_10_watched_movies_from_user(cursor, current_user)
+    if success and top_watched:
+        print(f"{'#':<4} {'Title':<40} {'Watch Count':<15}")
+        print(f"{'─'*60}")
+        for idx, (title, count) in enumerate(top_watched, 1):
+            print(f"{idx:<4} {title[:40]:<40} {count} times")
+    else:
+        print("No watched movies yet!")
+    
+    # Get additional watch stats
+    success, watch_stats = get_user_watch_stats(cursor, current_user)
+    if success:
+        print(f"\nWATCH STATISTICS")
+        print(f"{'─'*40}")
+        print(f"Total movies watched: {watch_stats['unique_movies']}")
+        print(f"Total views: {watch_stats['total_watches']}")
+        print(f"Total watch time: {watch_stats['total_hours']}h {watch_stats['total_minutes'] % 60}m")
+        print(f"Watches this week: {watch_stats['recent_watches']}")
+    
+    print(f"\n{'='*80}")
+    input("\nPress Enter to continue...")
+    return True
+
+def movie_recommendations_menu():
+    while True:
+        print("\n---MOVIE RECOMMENDATIONS---")
+        print("1. Get Personalized Recommendations (Based on Your Genres)")
+        print("2. Get Collaborative Recommendations (Based on Similar Users)")
+        print("3. Back to Main Menu")
+        
+        choice = input("\nEnter your choice: ")
+        
+        match choice:
+            case "1":
+                view_personalized_recommendations()
+            case "2":
+                view_collaborative_recommendations()
+            case "3":
+                return True
+            case _:
+                print("Invalid choice! Please try again.")
+
+def view_personalized_recommendations():
+    print("\n---PERSONALIZED RECOMMENDATIONS---")
+    print("Based on your most-watched genres...")
+    
+    success, recommendations = get_recommended_movies_for_user(cursor, current_user, 15)
+    
+    if success:
+        if recommendations:
+            print("\nRecommended Movies for You:")
+            print("-" * 120)
+            print(f"{'#':<4} {'Title':<35} {'Genres':<30} {'Rating':<12} {'Length':<10} {'Match':<8}")
+            print("-" * 120)
+            
+            for idx, rec in enumerate(recommendations, 1):
+                movie_id, title, release_date, length, mpaa, genres, avg_rating, rating_count, matching_genres = rec
+                
+                rating_str = f"{avg_rating:.1f}/5 ({rating_count})" if avg_rating else "Not rated"
+                length_str = f"{length} min" if length else "N/A"
+                match_str = f"{matching_genres} genre" + ("s" if matching_genres != 1 else "") if matching_genres > 0 else "General"
+                
+                print(f"{idx:<4} {title[:35]:<35} {genres[:30]:<30} {rating_str:<12} {length_str:<10} {match_str:<8}")
+            
+            print("-" * 120)
+            print("\nThese movies match your viewing preferences and haven't been watched yet.")
+            
+            # Option to add to collection
+            add_to_collection = input("\nWould you like to add any of these to a collection? (y/n): ").lower()
+            if add_to_collection == 'y':
+                try:
+                    movie_num = int(input("Enter movie number: ")) - 1
+                    if 0 <= movie_num < len(recommendations):
+                        movie_id = recommendations[movie_num][0]
+                        # Show user's collections
+                        success, collections = list_user_collections(cursor, current_user)
+                        if success and collections:
+                            print("\nYour Collections:")
+                            for coll_id, coll_name in collections:
+                                print(f"ID: {coll_id} - {coll_name}")
+                            
+                            coll_id = int(input("\nEnter collection ID: "))
+                            success, message = add_movie_to_collection(cursor, conn, coll_id, current_user, movie_id)
+                            print(f"\n{message}")
+                        else:
+                            print("\nNo collections found! Create one first.")
+                    else:
+                        print("\nInvalid movie number!")
+                except ValueError:
+                    print("\nInvalid input!")
+        else:
+            print("\nNo recommendations available. Try watching and rating more movies!")
+    else:
+        print(f"\nError: {recommendations}")
+    
+    input("\nPress Enter to continue...")
+
+def view_collaborative_recommendations():
+    print("\n---COLLABORATIVE RECOMMENDATIONS---")
+    print("Based on what users with similar tastes enjoyed...")
+    
+    success, recommendations = get_recommended_movies_collaborative(cursor, current_user, 15)
+    
+    if success:
+        if recommendations:
+            print("\nRecommended Movies (from similar users):")
+            print("-" * 120)
+            print(f"{'#':<4} {'Title':<35} {'Genres':<30} {'Overall':<10} {'Similar Users':<20}")
+            print("-" * 120)
+            
+            for idx, rec in enumerate(recommendations, 1):
+                if len(rec) >= 10:  # Collaborative recommendations
+                    movie_id, title, release_date, length, mpaa, genres, avg_all, total_ratings, avg_similar, similar_ratings = rec
+                    overall_str = f"{avg_all:.1f}/5" if avg_all else "N/A"
+                    similar_str = f"{avg_similar:.1f}/5 ({similar_ratings})" if avg_similar else "N/A"
+                else:  # Fallback recommendations
+                    movie_id, title, release_date, length, mpaa, genres, avg_rating, rating_count, _ = rec
+                    overall_str = f"{avg_rating:.1f}/5" if avg_rating else "N/A"
+                    similar_str = "N/A"
+                
+                print(f"{idx:<4} {title[:35]:<35} {genres[:30]:<30} {overall_str:<10} {similar_str:<20}")
+            
+            print("-" * 120)
+            print("\nThese movies are highly rated by users with similar viewing patterns.")
+        else:
+            print("\nNo collaborative recommendations available yet.")
+            print("Try rating more movies to find users with similar tastes!")
+    else:
+        print(f"\nError: {recommendations}")
+    
+    input("\nPress Enter to continue...")
+
 def top_movie_stats_menu():
-    """top movies submenu"""
     while True:
         print("\n---TOP MOVIES STATS---")
         print("1. Show top 10 movies from you by rating")
@@ -946,7 +1120,8 @@ def top_movie_stats_menu():
         print("3. Show top 20 most popular movies globally")
         print("4. Show top 20 most popular movies by users you're following")
         print("5. Show top 5 movies this month")
-        print("6. Back to Main Menu")
+        print("6. Show top 20 movies from last 90 days")  
+        print("7. Back to Main Menu")
 
         choice = input("\nEnter your choice: ")
 
@@ -960,11 +1135,41 @@ def top_movie_stats_menu():
             case "4":
                 view_top_20_movies_by_followed()
             case "5":
-                pass
+                view_top_5_new_releases()
             case "6":
+                view_top_20_movies_last_90_days()  
+            case "7":
                 return True
             case _:
                 print("Invalid choice! Please try again.")
+
+def view_top_5_new_releases():
+    success, movies = get_top_5_new_releases_this_month(cursor)
+    
+    if success:
+        if movies:
+            print(f"\n---TOP 5 NEW RELEASES THIS MONTH---")
+            print("-" * 80)
+            print(f"{'#':<4} {'Title':<40} {'Release Date':<12} {'Rating':<8} {'Genres':<25}")
+            print("-" * 80)
+            
+            for idx, (movie_id, title, release_date, mpaa, genres, avg_rating, rating_count) in enumerate(movies, 1):
+                release_str = release_date.strftime('%Y-%m-%d') if release_date else 'N/A'
+                rating_str = f"{avg_rating:.1f}/5" if avg_rating else "Not rated"
+                genres_str = genres[:25] if genres else 'N/A'
+                
+                print(f"{idx:<4} {title[:40]:<40} {release_str:<12} {rating_str:<8} {genres_str:<25}")
+            
+            print("-" * 80)
+            
+            if len(movies) < 5:
+                print(f"\nNote: Only {len(movies)} new releases found for this month.")
+        else:
+            print("\nNo new releases found for this month!")
+    else:
+        print(f"\nError: {movies}")
+    
+    input("\nPress Enter to continue...")
 
 def view_top_20_popular_movies():
     success, movies = get_top_20_popular_movies(cursor)
@@ -1012,6 +1217,37 @@ def view_top_20_movies_by_followed():
         print(f"\nError: {movies}")
 
     input("\nPress Enter to continue...")
+
+def view_top_20_movies_last_90_days():
+    """Display top 20 movies from the last 90 days"""
+    success, movies = get_top_20_movies_last_90_days(cursor)
+    
+    if success:
+        if movies:
+            print("\n--- TOP 20 MOVIES (LAST 90 DAYS) ---")
+            print(f"Based on watch data from {(datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}")
+            print("-" * 120)
+            print(f"{'#':<4} {'Title':<35} {'Watches':<10} {'Viewers':<10} {'Rating':<12} {'Genres':<30}")
+            print("-" * 120)
+            
+            for idx, movie in enumerate(movies, 1):
+                movie_id, title, release_date, mpaa, watch_count, unique_viewers, genres, avg_rating, rating_count = movie
+                
+                rating_str = f"{avg_rating:.1f}/5 ({rating_count})" if avg_rating else "Not rated"
+                genres_str = genres[:30] if genres else 'N/A'
+                
+                print(f"{idx:<4} {title[:35]:<35} {watch_count:<10} {unique_viewers:<10} {rating_str:<12} {genres_str:<30}")
+            
+            print("-" * 120)
+            print(f"\nTotal watches for top 20: {sum(m[4] for m in movies)}")
+            print(f"Total unique viewers: {sum(m[5] for m in movies)}")
+        else:
+            print("\nNo movies watched in the last 90 days!")
+    else:
+        print(f"\nError: {movies}")
+    
+    input("\nPress Enter to continue...")
+
 
 def main():
     global conn, cursor
